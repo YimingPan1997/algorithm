@@ -1,0 +1,30 @@
+CREATE QUERY statistic_result(/* Parameters here */) FOR GRAPH MSFT { 
+  /* Write query logic here */ 
+  TYPEDEF TUPLE<STRING game, FLOAT score> game_Score;
+  
+  MapAccum<INT,INT> @@statistic_count;
+  MapAccum<INT,MapAccum<STRING,INT>> @@res;
+  MapAccum<INT,STRING> @@gameRank;
+  HeapAccum<game_Score>(3,score desc) @@final_res;
+  
+  all = {user.*};
+  all = SELECT e FROM all:e ACCUM @@statistic_count+=(e.Louvain->1),
+                                  FOREACH i in e.histry DO 
+                                          @@res+=(e.Louvain->(i->1))
+                                  END;
+  
+  
+  FOREACH (key,value) in @@statistic_count DO
+          FOREACH (x,y) in @@res.get(key) DO 
+                  @@final_res+=game_Score(x,y);
+          END;
+          @@gameRank+=(key->@@final_res.pop().game);
+          @@final_res.clear();
+  
+  
+  END;
+  all = SELECT s FROM all:s POST-ACCUM s.TopGame=@@gameRank.get(s.Louvain);
+  print all;
+  print @@gameRank;
+  PRINT "statistic_result works!"; 
+}

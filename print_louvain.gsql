@@ -1,0 +1,48 @@
+CREATE QUERY print_louvain(/* Parameters here */) FOR GRAPH MSFT { 
+  /* Write query logic here */
+  TYPEDEF TUPLE <INT sizee,int countt> community_size;
+  MapAccum<INT,INT> @@size;
+  MapAccum<INT,SetAccum<INT>> @@res;
+  HeapAccum<community_size>(30,sizee desc) @@rank;
+  SetAccum<INT> @@community_list;
+  MaxAccum<INT> @id;
+  start = {user.*};
+  FILE f1 ("/home/tigergraph/edge.csv");
+  FILE f2 ("/home/tigergraph/node.csv");
+  f1.println("node1","node2");
+  f2.println("node","Louvain","Game");
+  start = SELECT s FROM start:s LIMIT 2;
+  while start.size()<2 DO
+        start = SELECT s FROM start-(chat_interaction)-user:s;
+  END;
+  start = SELECT s FROM start:s-(chat_interaction)-user:t 
+                    ACCUM f1.println(s,t) 
+                    POST-ACCUM f2.println(s,s.Louvain,s.TopGame)
+                    POST-ACCUM f2.println(t,t.Louvain,t.TopGame);
+  #############################################################################################################################################
+  start = {user.*};
+  start = SELECT s FROM start:s ACCUM @@size+=(s.Louvain->1);
+  FOREACH (key,value) in @@size DO
+        @@res+=(value->key);
+  END;
+  FOREACH (KEY,value) in @@res DO
+        @@rank+=community_size(KEY,value.size());
+  END;
+  print @@rank;
+  @@community_list+=@@res.get(4);
+  @@community_list+=@@res.get(10);
+  @@community_list+=@@res.get(10);
+  print @@community_list;
+  start = {user.*};
+  FILE f3 ("/home/tigergraph/edge1.csv");
+  FILE f4 ("/home/tigergraph/node1.csv");
+  f3.println("node1","node2");
+  f4.println("node","Louvain","Game");
+  
+  start = SELECT s FROM start:s-(chat_interaction)-user:t 
+                    WHERE t.Louvain in @@community_list
+                    ACCUM f3.println(s,t) 
+                    POST-ACCUM f4.println(s,s.Louvain,s.TopGame)
+                    POST-ACCUM f4.println(t,t.Louvain,t.TopGame);
+  PRINT "print_louvain works!"; 
+}
