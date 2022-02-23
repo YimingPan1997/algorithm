@@ -1,4 +1,4 @@
 # algorithm
-http://ec2-34-219-155-145.us-west-2.compute.amazonaws.com/pivot/upload-file
+http://ec2-54-186-190-96.us-west-2.compute.amazonaws.com/
 admin
 i-0baf65d24bbcc2c1c
