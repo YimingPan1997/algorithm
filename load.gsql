@@ -1,0 +1,5 @@
+use graph MSFT
+CREATE LOADING JOB load_histry FOR GRAPH MSFT {
+DEFINE FILENAME user_file;
+LOAD user_file
+    TO VERTEX user VALUES ($0, SPLIT($1,";"),_,_) USING header="true", separator="\t";}
