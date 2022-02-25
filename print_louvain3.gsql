@@ -1,0 +1,72 @@
+CREATE QUERY print_louvain3(string file1="/home/tigergraph/algorithm/edge.csv",
+  string file2="/home/tigergraph/algorithm/node.csv",set<INT> community_size_set,INT choose_number,int sample1=3,INT limit1,bool one_hop,BOOL two_hop,bool three_hop) FOR GRAPH MSFT { 
+  /* Write query logic here */
+  TYPEDEF TUPLE <INT sizee,int countt> community_size;
+  MapAccum<INT,INT> @@size;
+  MapAccum<INT,SetAccum<INT>> @@res;
+  HeapAccum<community_size>(30,sizee desc) @@rank;
+  SetAccum<INT> @@community_list;
+  SetAccum<INT> @@current_list;
+  MaxAccum<INT> @id;
+  OrAccum @visited;
+  start = {user.*};
+  FILE f3 (file1);
+  FILE f4 (file2);
+  f3.println("node1","node2","size");
+  f4.println("node","Louvain","size","topgame");
+  start = {user.*};
+  start = SELECT s FROM start:s ACCUM @@size+=(s.Louvain->1);
+  FOREACH (key,value) in @@size DO
+        @@res+=(value->key);
+  END;
+  FOREACH (KEY,value) in @@res DO
+        @@rank+=community_size(KEY,value.size());
+  END;
+  print @@rank;
+  int countt=1;
+  FOREACH i in community_size_set DO
+      int k=0;
+      FOREACH j in @@res.get(i) DO
+            @@community_list+=j;
+            k+=1;
+            IF k==choose_number then
+                break; END;
+      END;
+      
+      
+      
+  END;
+  int ttt = (450.0-320.0)/@@community_list.size()*1.0;
+  FOREACH i in @@community_list DO
+      cur = SELECT t FROM start:s-(chat_interaction)-user:t 
+                    WHERE s.Louvain==i and t.Louvain==i
+                    ACCUM f3.println(s,t,@@size.get(t.Louvain)*10),s.@visited+=TRUE,t.@visited+=TRUE 
+                    POST-ACCUM f4.println(s,320000000+countt*ttt*1000000,@@size.get(s.Louvain)*10,s.TopGame)
+                    POST-ACCUM f4.println(t,320000000+countt*ttt*1000000,@@size.get(t.Louvain)*10,t.TopGame);
+      countt+=1;
+  END;
+  start = SELECT t FROM start:t WHERE t.Louvain in @@community_list;
+  IF one_hop THEN
+  start = SELECT t FROM start:s-(chat_interaction)-user:t 
+                    SAMPLE sample1 EDGE WHEN s.outdegree()>0
+                    
+                    ACCUM f3.println(s,t,@@size.get(t.Louvain)+(t.id*1.0/1000000.0)),s.@visited+=TRUE 
+                    POST-ACCUM IF t.@visited!=TRUE THEN f4.println(t,t.Louvain,@@size.get(t.Louvain)+(t.id*1.0/1000000.0),t.TopGame) END,t.@visited+=TRUE
+                    LIMIT limit1;
+  END;
+  IF two_hop THEN
+  start = SELECT t FROM start:s-(chat_interaction)-user:t 
+                    SAMPLE sample1 EDGE WHEN s.outdegree()>0
+                    
+                    ACCUM f3.println(s,t,@@size.get(t.Louvain)+(t.id*1.0/1000000.0)),s.@visited+=TRUE
+                    POST-ACCUM IF t.@visited!=TRUE THEN f4.println(t,t.Louvain,@@size.get(t.Louvain)+(t.id*1.0/1000000.0),t.TopGame) END,t.@visited+=TRUE LIMIT limit1;
+  END;
+  IF three_hop THEN
+  start = SELECT t FROM start:s-(chat_interaction)-user:t 
+                    SAMPLE sample1 EDGE WHEN s.outdegree()>0
+                    
+                    ACCUM f3.println(s,t,@@size.get(t.Louvain)+(t.id*1.0/1000000.0)),s.@visited+=TRUE
+                    POST-ACCUM IF t.@visited!=TRUE THEN f4.println(t,t.Louvain,@@size.get(t.Louvain)+(t.id*1.0/1000000.0),t.TopGame) END,t.@visited+=TRUE;
+  END;
+  PRINT "print_louvain works!"; 
+}

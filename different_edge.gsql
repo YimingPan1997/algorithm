@@ -1,0 +1,36 @@
+CREATE QUERY different_edge(set<INT> community_size_set,int choose_number,string edge_type/* Parameters here */) FOR GRAPH MSFT { 
+  /* Write query logic here */ 
+  TYPEDEF TUPLE <INT sizee,int countt> community_size;
+  MapAccum<INT,INT> @@size;
+  MapAccum<INT,SetAccum<INT>> @@res;
+  HeapAccum<community_size>(30,sizee desc) @@rank;
+  SetAccum<INT> @@community_list;
+  SetAccum<INT> @@current_list;
+  MaxAccum<INT> @id;
+  SetAccum<EDGE> @@edge_res;
+  OrAccum @visited;
+  start = {user.*};
+  start = SELECT s FROM start:s ACCUM @@size+=(s.Louvain->1);
+  FOREACH (key,value) in @@size DO
+        @@res+=(value->key);
+  END;
+  FOREACH (KEY,value) in @@res DO
+        @@rank+=community_size(KEY,value.size());
+  END;
+  print @@rank;
+  int countt=1;
+  FOREACH i in community_size_set DO
+      int k=0;
+      FOREACH j in @@res.get(i) DO
+            @@community_list+=j;
+            k+=1;
+            IF k==choose_number then
+                break; END;
+      END;
+  END;
+  start = SELECT s FROM start:s WHERE s.Louvain in @@community_list;
+  print start;
+  start = SELECT t FROM start:s-(edge_type:e)-user:t WHERE s.Louvain==t.Louvain ACCUM @@edge_res+=e;
+  print @@edge_res;
+  PRINT "different_edge works!"; 
+}
