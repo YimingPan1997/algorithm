@@ -2,5 +2,12 @@ use graph MSFT
 CREATE LOADING JOB load_histry222 FOR GRAPH MSFT {
 DEFINE FILENAME user_file="/home/ubuntu/gr_viz_hist.csv";
 LOAD user_file
-    TO VERTEX user VALUES ($0, SPLIT($1,";"),_,_) USING header="false", separator="\t";}
+    TO VERTEX user VALUES ($0, SPLIT($1,";"),_,_,_,_) USING header="false", separator="\t";}
 run loading job load_histry222
+
+
+CREATE LOADING JOB load_club1 FOR GRAPH MSFT {
+DEFINE FILENAME user_file="/home/ubuntu/gr_viz_comm_clubs.tsv";
+LOAD user_file
+    TO VERTEX user VALUES ($0,_,_,_,SPLIT($1,";"),_) USING header="false", separator="\t";}
+run loading job load_club1
