@@ -11,3 +11,28 @@ DEFINE FILENAME user_file="/home/ubuntu/gr_viz_comm_clubs.tsv";
 LOAD user_file
     TO VERTEX user VALUES ($0,_,_,_,SPLIT($1,";"),_) USING header="false", separator="\t";}
 run loading job load_club1
+
+USE GRAPH MSFT
+CREATE LOADING JOB load_job_gr_viz_party_csv FOR GRAPH MSFT {
+      DEFINE FILENAME MyDataSource;
+      LOAD MyDataSource TO EDGE chat_interaction VALUES($0, $1, $2) USING SEPARATOR="\t", HEADER="false", EOL="\n";
+    }
+
+run loading job load_job_gr_viz_party_csv
+CREATE LOADING JOB load_job_gr_viz_shareid_csv FOR GRAPH MSFT {
+      DEFINE FILENAME MyDataSource;
+      LOAD MyDataSource TO EDGE shareIdentity VALUES($0, $1) USING SEPARATOR="\t", HEADER="false", EOL="\n";
+    }
+run loading job load_job_gr_viz_shareid_csv
+
+CREATE LOADING JOB load_job_gr_viz_favor_csv FOR GRAPH MSFT {
+      DEFINE FILENAME MyDataSource;
+      LOAD MyDataSource TO EDGE favor VALUES($0, $1) USING SEPARATOR="\t", HEADER="false", EOL="\n";
+    }
+run loading job load_job_gr_viz_favor_csv
+
+CREATE LOADING JOB load_job_gr_viz_rplaycount_tsv FOR GRAPH MSFT {
+      DEFINE FILENAME MyDataSource;
+      LOAD MyDataSource TO EDGE play VALUES($0, $1, $2) USING SEPARATOR="\t", HEADER="false", EOL="\n";
+    }
+run loading job load_job_gr_viz_rplaycount_tsv
