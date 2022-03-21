@@ -1,0 +1,338 @@
+CREATE QUERY tg_betweenness_cent_v2(SET<STRING> v_type, SET<STRING> e_type, STRING re_type,INT max_hops = 10,
+  INT top_k = 100, BOOL print_accum = True, STRING result_attr = "",
+  STRING file_path = "", BOOL display_edges = FALSE) SYNTAX V1 { 
+
+  
+  /* Compute Betweenness Centrality for each VERTEX. 
+  Use multi-sourse BFS.
+  Link of the paper: http://www.vldb.org/pvldb/vol8/p449-then.pdf
+  Parameters:
+  v_type: vertex types to traverse                 print_accum: print JSON output
+  e_type: edge types to traverse                   result_attr: INT attr to store results to
+  re_type: reverse edge type in directed graph, in undirected graph set re_type=e_type
+  max_hops: look only this far from each vertex    file_path: file to write CSV output to
+  top_k: report only this many top scores          display_edges: output edges for visualization
+   */ 
+   
+  TYPEDEF TUPLE<VERTEX Vertex_ID, FLOAT score> Vertex_Score; #tuple to store betweenness centrality score
+  HeapAccum<Vertex_Score>(top_k, score DESC) @@top_scores_heap; #heap to store top K score
+  SumAccum<INT> @@sum_curr_dist; #current distance
+  BitwiseOrAccum @bitwise_or_visit_next; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen;
+  BitwiseOrAccum @bitwise_or_visit; 
+    BitwiseOrAccum @bitwise_or_visit_next1; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen1;
+  BitwiseOrAccum @bitwise_or_visit1; 
+    BitwiseOrAccum @bitwise_or_visit_next2; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen2;
+  BitwiseOrAccum @bitwise_or_visit2; 
+    BitwiseOrAccum @bitwise_or_visit_next3; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen3;
+  BitwiseOrAccum @bitwise_or_visit3; 
+    BitwiseOrAccum @bitwise_or_visit_next4; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen4;
+  BitwiseOrAccum @bitwise_or_visit4; 
+    BitwiseOrAccum @bitwise_or_visit_next5; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen5;
+  BitwiseOrAccum @bitwise_or_visit5; 
+    BitwiseOrAccum @bitwise_or_visit_next6; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen6;
+  BitwiseOrAccum @bitwise_or_visit6; 
+    BitwiseOrAccum @bitwise_or_visit_next7; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen7;
+  BitwiseOrAccum @bitwise_or_visit7;
+    BitwiseOrAccum @bitwise_or_visit_next8; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen8;
+  BitwiseOrAccum @bitwise_or_visit8; 
+    BitwiseOrAccum @bitwise_or_visit_next9; #use bitwise instead of setAccum
+  BitwiseOrAccum @bitwise_or_seen9;
+  BitwiseOrAccum @bitwise_or_visit9; 
+  SumAccum<INT> @@sum_count = 1;#used to set unique ID
+  SumAccum<INT> @sum_id; #store the unique ID
+  SetAccum<INT> @@batch_set; #used to set unique ID
+  MapAccum<INT,INT> @@map; #used to set unique ID 
+  SetAccum<EDGE> @@edge_set;
+  SumAccum<FLOAT> @sum_delta = 0;
+  MapAccum<INT,BitwiseOrAccum> @times_map;
+  MapAccum<INT,SumAccum<INT>> @sigma_map;
+  
+  INT empty=0;
+  FILE f (file_path);
+  INT num_vert;
+  INT batch_number;
+
+# Compute betweenness	
+  all = {v_type};
+  num_vert = all.size();
+  batch_number = num_vert/600;
+    
+  IF batch_number == 0 
+      THEN batch_number = 1;
+  END;
+    
+  #Calculate the sum of distance to other vertex for each vertex
+  FOREACH i IN RANGE[0, batch_number-1] DO
+      Current = SELECT s 
+                FROM all:s
+                WHERE getvid(s)%batch_number == i
+                POST-ACCUM @@map+=(getvid(s)->0),
+                           @@batch_set+=getvid(s);
+  
+      FOREACH ver in @@batch_set DO 
+          @@map += (ver->@@sum_count); @@sum_count += 1;
+      END; #set a unique ID for each vertex, ID from 1-63
+    
+      Start = SELECT s 
+              FROM Current:s 
+              POST-ACCUM 
+	            s.@sum_id=@@map.get(getvid(s));
+    
+      Start = SELECT s 
+              FROM Current:s
+              POST-ACCUM 
+              IF s.@sum_id<=60 THEN 
+	            s.@bitwise_or_seen = 1<<s.@sum_id,
+                    s.@bitwise_or_visit = s.@bitwise_or_seen,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit)
+              ELSE IF s.@sum_id/60==1 THEN
+              s.@bitwise_or_seen1 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit1 = s.@bitwise_or_seen1,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit1)
+              ELSE IF s.@sum_id/60==2 THEN
+              s.@bitwise_or_seen2 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit2 = s.@bitwise_or_seen2,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit2)
+              ELSE IF s.@sum_id/60==3 THEN
+              s.@bitwise_or_seen3 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit3 = s.@bitwise_or_seen3,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit3)
+              ELSE IF s.@sum_id/60==4 THEN
+              s.@bitwise_or_seen4 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit4 = s.@bitwise_or_seen4,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit4)
+              ELSE IF s.@sum_id/60==5 THEN
+              s.@bitwise_or_seen5 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit5 = s.@bitwise_or_seen5,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit5)
+              ELSE IF s.@sum_id/60==6 THEN
+              s.@bitwise_or_seen6 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit6 = s.@bitwise_or_seen6,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit6)
+              ELSE IF s.@sum_id/60==7 THEN
+              s.@bitwise_or_seen7 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit7 = s.@bitwise_or_seen7,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit7)
+              
+    ELSE IF s.@sum_id/60==8 THEN
+              s.@bitwise_or_seen8 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit8 = s.@bitwise_or_seen8,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit8)
+    ELSE IF s.@sum_id/60==9 THEN
+              s.@bitwise_or_seen9 = 1<<s.@sum_id,
+                    s.@bitwise_or_visit9 = s.@bitwise_or_seen9,
+                    s.@sigma_map += (0->1),
+                    s.@times_map += (0->s.@bitwise_or_visit9)
+              END;
+                     # set initial seen and visit
+    
+      @@batch_set.clear();
+      @@map.clear();
+      @@sum_count=0;
+      
+      WHILE (Start.size() > 0) LIMIT max_hops DO
+          @@sum_curr_dist+=1;
+    
+          Start = SELECT t 
+                  FROM Start:s -(re_type:e)-v_type:t
+                  WHERE s.@bitwise_or_visit&-t.@bitwise_or_seen-1>0 
+                        OR s.@bitwise_or_visit1&-t.@bitwise_or_seen1-1>0 
+    OR s.@bitwise_or_visit2&-t.@bitwise_or_seen2-1>0
+    OR s.@bitwise_or_visit3&-t.@bitwise_or_seen3-1>0
+    OR s.@bitwise_or_visit4&-t.@bitwise_or_seen4-1>0
+    OR s.@bitwise_or_visit5&-t.@bitwise_or_seen5-1>0
+    OR s.@bitwise_or_visit6&-t.@bitwise_or_seen6-1>0
+    OR s.@bitwise_or_visit7&-t.@bitwise_or_seen7-1>0
+    OR s.@bitwise_or_visit8&-t.@bitwise_or_seen8-1>0
+    OR s.@bitwise_or_visit9&-t.@bitwise_or_seen9-1>0
+                        AND s!=t #use -t.@seen-1 to get the trverse of t.@seen
+                  ACCUM                               #updatevisitNext
+                      INT c = s.@bitwise_or_visit&-t.@bitwise_or_seen-1,
+    INT c1 = s.@bitwise_or_visit1&-t.@bitwise_or_seen1-1,
+    INT c2 = s.@bitwise_or_visit2&-t.@bitwise_or_seen2-1,
+    INT c3 = s.@bitwise_or_visit3&-t.@bitwise_or_seen3-1,
+    INT c4 = s.@bitwise_or_visit4&-t.@bitwise_or_seen4-1,
+    INT c5 = s.@bitwise_or_visit5&-t.@bitwise_or_seen5-1,
+    INT c6 = s.@bitwise_or_visit6&-t.@bitwise_or_seen6-1,
+    INT c7 = s.@bitwise_or_visit7&-t.@bitwise_or_seen7-1,
+    INT c8 = s.@bitwise_or_visit8&-t.@bitwise_or_seen8-1,
+    INT c9 = s.@bitwise_or_visit9&-t.@bitwise_or_seen9-1,
+                      IF c>0 THEN 
+		          t.@bitwise_or_visit_next+=c,
+                          t.@bitwise_or_seen+=c
+                      END,
+    IF c1>0 THEN 
+		          t.@bitwise_or_visit_next1+=c,
+                          t.@bitwise_or_seen1+=c
+                      END,
+    IF c2>0 THEN 
+		          t.@bitwise_or_visit_next2+=c,
+                          t.@bitwise_or_seen2+=c
+                      END,
+    IF c3>0 THEN 
+		          t.@bitwise_or_visit_next3+=c,
+                          t.@bitwise_or_seen3+=c
+                      END,
+    IF c4>0 THEN 
+		          t.@bitwise_or_visit_next4+=c,
+                          t.@bitwise_or_seen4+=c
+                      END,
+    IF c5>0 THEN 
+		          t.@bitwise_or_visit_next5+=c,
+                          t.@bitwise_or_seen5+=c
+                      END,
+    IF c6>0 THEN 
+		          t.@bitwise_or_visit_next6+=c,
+                          t.@bitwise_or_seen6+=c
+                      END,
+    IF c7>0 THEN 
+		          t.@bitwise_or_visit_next7+=c,
+                          t.@bitwise_or_seen7+=c
+                      END,
+    IF c8>0 THEN 
+		          t.@bitwise_or_visit_next8+=c,
+                          t.@bitwise_or_seen8+=c
+                      END,
+    IF c9>0 THEN 
+		          t.@bitwise_or_visit_next9+=c,
+                          t.@bitwise_or_seen9+=c
+                      END,
+    
+                      t.@sigma_map+=(@@sum_curr_dist->s.@sigma_map.get(@@sum_curr_dist-1)) #set sigma based on depth
+                  POST-ACCUM 
+	              t.@bitwise_or_visit=t.@bitwise_or_visit_next,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit),
+                      t.@bitwise_or_visit_next=0,
+    t.@bitwise_or_visit1=t.@bitwise_or_visit_next1,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit1),
+                      t.@bitwise_or_visit_next1=0,
+    t.@bitwise_or_visit2=t.@bitwise_or_visit_next2,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit2),
+                      t.@bitwise_or_visit_next2=0,
+    t.@bitwise_or_visit3=t.@bitwise_or_visit_next3,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit3),
+                      t.@bitwise_or_visit_next3=0,
+    t.@bitwise_or_visit4=t.@bitwise_or_visit_next4,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit4),
+                      t.@bitwise_or_visit_next4=0,
+    t.@bitwise_or_visit5=t.@bitwise_or_visit_next5,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit5),
+                      t.@bitwise_or_visit_next5=0,
+    t.@bitwise_or_visit6=t.@bitwise_or_visit_next6,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit6),
+                      t.@bitwise_or_visit_next6=0,
+    t.@bitwise_or_visit7=t.@bitwise_or_visit_next7,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit7),
+                      t.@bitwise_or_visit_next7=0,
+    t.@bitwise_or_visit8=t.@bitwise_or_visit_next8,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit8),
+                      t.@bitwise_or_visit_next8=0,
+    t.@bitwise_or_visit9=t.@bitwise_or_visit_next9,
+                      t.@times_map+=(@@sum_curr_dist->t.@bitwise_or_visit9),
+                      t.@bitwise_or_visit_next9=0
+    ;
+      END;
+      @@sum_curr_dist+=-1;
+    
+      Start = SELECT s 
+              FROM all:s 
+              WHERE s.@sigma_map.get(@@sum_curr_dist)!=0;
+    
+      WHILE (Start.size()>0) LIMIT max_hops DO
+          @@sum_curr_dist+=-1;
+          Start = SELECT t 
+                  FROM Start:s -(re_type:e)- v_type:t
+	          WHERE t.@times_map.get(@@sum_curr_dist)&s.@times_map.get(@@sum_curr_dist+1)!=0  
+	          ACCUM 
+                      FLOAT currValue=t.@sigma_map.get(@@sum_curr_dist)/(s.@sigma_map.get(@@sum_curr_dist+1)*(1+s.@sum_delta)),
+                      INT r=t.@times_map.get(@@sum_curr_dist)&s.@times_map.get(@@sum_curr_dist+1),
+                      INT plus=0,
+                      WHILE r>0 DO 
+                          r=r&(r-1),plus=plus+1 #count how many 1 in the number, same as setAccum,size()
+                      END,
+                      FLOAT value = currValue*plus/2.0,
+                      t.@sum_delta+=value;
+          Start = SELECT s 
+                  FROM all:s 
+                  WHERE s.@sigma_map.get(@@sum_curr_dist)!=0;	
+      END;
+      
+      @@sum_curr_dist=0;
+      Start = SELECT s 
+              FROM all:s 
+              POST-ACCUM 
+	            s.@bitwise_or_seen=0,
+                    s.@bitwise_or_visit=0,
+    s.@bitwise_or_seen1=0,
+                    s.@bitwise_or_visit1=0,
+    s.@bitwise_or_seen2=0,
+                    s.@bitwise_or_visit2=0,
+    s.@bitwise_or_seen3=0,
+                    s.@bitwise_or_visit3=0,
+    s.@bitwise_or_seen4=0,
+                    s.@bitwise_or_visit4=0,
+    s.@bitwise_or_seen5=0,
+                    s.@bitwise_or_visit5=0,
+    s.@bitwise_or_seen6=0,
+                    s.@bitwise_or_visit6=0,
+    s.@bitwise_or_seen7=0,
+                    s.@bitwise_or_visit7=0,
+    s.@bitwise_or_seen8=0,
+                    s.@bitwise_or_visit8=0,
+    s.@bitwise_or_seen9=0,
+                    s.@bitwise_or_visit9=0,
+                    s.@sigma_map.clear(),
+                    s.@times_map.clear();
+  END;
+  
+  #Output
+  IF file_path != "" THEN
+      f.println("Vertex_ID", "Betweenness");
+  END;
+	
+  Start = SELECT s 
+          FROM all:s
+          POST-ACCUM 
+	      IF result_attr != "" THEN 
+                  s.setAttr(result_attr, s.@sum_delta) 
+              END,
+    
+	      IF print_accum THEN 
+                  @@top_scores_heap += Vertex_Score(s, s.@sum_delta) 
+              END,
+    
+	      IF file_path != "" THEN 
+                  f.println(s, s.@sum_delta) 
+              END;
+	      
+   IF print_accum THEN
+       PRINT @@top_scores_heap AS top_scores;
+       IF display_edges THEN
+           PRINT Start[Start.@sum_delta];
+	   Start = SELECT s
+	           FROM Start:s -(e_type:e)-:t
+	           ACCUM 
+                         @@edge_set += e;
+	           PRINT @@edge_set;
+        END;
+    END;
+
+}
