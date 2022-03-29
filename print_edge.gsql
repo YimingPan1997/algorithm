@@ -1,0 +1,8 @@
+CREATE QUERY print_edge(string v_type,string e_type,string file_path/* Parameters here */) SYNTAX v1 { 
+  /* Write query logic here */ 
+  FILE f(file_path);
+  f.println("start_node","target_node");
+  start = {v_type};
+  start = SELECT s FROM start:s-(e_type)-v_type:t WHERE getvid(s)<getvid(t) ACCUM f.println(s,t);
+  PRINT "print_edge works!"; 
+}
