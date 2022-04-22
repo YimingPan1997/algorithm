@@ -1,0 +1,70 @@
+CREATE QUERY Cycle(DATETIME start_time, DATETIME end_time, DOUBLE min_amt, INT depth, DOUBLE amount_gap, INT path_num, STRING output) FOR GRAPH MuleGraph { 
+  TYPEDEF TUPLE<DATETIME trans_dt, DOUBLE trans_amt> trans_tuple;
+  OrAccum @satisfy,@visited;
+  ListAccum<ListAccum<VERTEX<Account>>> @path_set,@result_set,@true_set;
+  MaxAccum<VERTEX<Account>> @trans;
+  SetAccum<trans_tuple> @trans_set,@receive_set;
+  double epsilon=0.00000001;
+  File f(output);
+  Start = {Fund_Transfer.*};
+  
+  Trans = SELECT s FROM Start:s-(receive:e)->Account:t 
+      WHERE e.amount > (min_amt - epsilon) 
+      AND e.date >= start_time 
+      AND e.date <= end_time
+      ACCUM t.@receive_set += trans_tuple(e.date,e.amount)
+      POST-ACCUM s.@satisfy = TRUE;
+  
+  Accounts = {Account.*};
+  
+  WHILE Accounts.size() > 0 LIMIT depth DO 
+      L = SELECT t FROM Accounts:s-(transfer:e)->Fund_Transfer:t 
+            WHERE t.@satisfy == TRUE AND t.@visited == False
+            ACCUM t.@trans += s,
+                  s.@trans_set += trans_tuple(e.date,e.amount),
+                  FOREACH rs IN s.@receive_set DO 
+                      IF rs.trans_dt <= e.date AND  e.amount> (rs.trans_amt * amount_gap - epsilon) AND e.amount < ( rs.trans_amt + epsilon) THEN 
+                      t.@path_set = s.@path_set
+                      end
+                  END; 
+  
+      Accounts = SELECT t FROM L:s-(receive:e)->Account:t 
+            ACCUM
+              FOREACH i IN range[0,s.@path_set.size()-1] DO 
+                  IF s.@path_set.get(i).get(0) == t AND t.@result_set.contains(s.@path_set.get(i) + [s.@trans]) == False AND s.@path_set.get(i).size() >= path_num -1 THEN 
+                      t.@result_set += s.@path_set.get(i) + [s.@trans]
+                  END
+              END,
+              
+              FOREACH tr IN t.@trans_set DO 
+                  IF tr.trans_dt >= e.date AND  tr.trans_amt > (e.amount * amount_gap - epsilon) AND tr.trans_amt < ( e.amount + epsilon) THEN 
+                      IF s.@path_set.size() == 0 THEN 
+                          t.@path_set += [s.@trans]
+                      END,
+                      IF s.@path_set.size() > 0 THEN 
+                          FOREACH j IN s.@path_set DO
+                            t.@path_set += j + [s.@trans]
+                          END  
+                      END
+                  END             
+              END;
+            
+              
+  
+      
+  END;
+  
+  
+  f.println("start_id", "path_list");
+  Result = SELECT s FROM Accounts:s 
+            POST-ACCUM 
+                FOREACH i IN s.@result_set DO 
+                    IF s.@true_set.contains(i) == False THEN 
+                        s.@true_set += i
+                    END
+                 END,
+                 FOREACH j IN s.@true_set DO 
+                      f.println(s, j)
+                 END;
+            
+}

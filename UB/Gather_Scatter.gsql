@@ -1,0 +1,45 @@
+CREATE QUERY Gather_Scatter(DATETIME start_time, DATETIME end_time, DOUBLE min_amt, INT min_num, DOUBLE amt_gap, STRING output) FOR GRAPH MuleGraph { 
+  
+  MaxAccum<DATETIME> @receive_time;
+  MinAccum<DATETIME> @transfer_time;
+  SumAccum<DOUBLE> @receive_amount;
+  SumAccum<DOUBLE> @transfer_amount;
+  MaxAccum<VERTEX<Account>> @trans,@receive;
+  SetAccum<VERTEX<Account>> @trans_set, @receive_set;
+  OrAccum @satisfy;
+  double epsilon=0.00000001;
+  File f(output);
+  Start = {Fund_Transfer.*};
+  
+  
+  Trans = SELECT s FROM Start:s-(receive:e)->Account:t 
+      WHERE e.amount > (min_amt - epsilon) 
+      AND e.date >= start_time 
+      AND e.date <= end_time
+      ACCUM s.@receive += t,
+            t.@receive_time += e.date,
+            t.@receive_amount += e.amount
+      POST-ACCUM s.@satisfy = TRUE;
+  
+  Accounts = {Account.*};
+  
+  L = SELECT s FROM Accounts:s-(transfer:e)->Fund_Transfer:t 
+      WHERE t.@satisfy == TRUE 
+      ACCUM t.@trans += s, 
+            s.@transfer_time += e.date,
+            s.@transfer_amount += e.amount,
+            s.@trans_set += t.@receive;
+  
+  Trans = SELECT s FROM Trans:s-(receive:e)->Account:t 
+      ACCUM t.@receive_set += s.@trans; 
+  
+  f.println("target_account","trans_set","receive_set");
+  Result = SELECT s FROM Accounts:s 
+        WHERE s.@trans_set.size() >= min_num 
+        AND s.@receive_set.size() >= min_num 
+        AND s.@transfer_time > s.@receive_time 
+        AND s.@transfer_amount > (s.@receive_amount * amt_gap - epsilon )
+        AND s.@transfer_amount < (s.@receive_amount + epsilon)
+        POST-ACCUM f.println(s, s.@trans_set, s.@receive_set);
+  
+}
