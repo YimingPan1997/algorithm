@@ -1,0 +1,39 @@
+CREATE QUERY one_event_test1(VERTEX<Person> test1,VERTEX<Event> test,string file_path) FOR GRAPH verisk_v1 SYNTAX v1{
+  /* Write query logic here
+  The aggregation logic for louvain is in two parts:
+   1) We count all interactions between involved party and service provider
+   2) We count all events for involved parties across claims*/
+  MapAccum<VERTEX<Person>,FLOAT> @map;
+  MaxAccum<VERTEX<Person>> @id;
+  MaxAccum<INT> @idd;
+  SetAccum<VERTEX<Person>> @inter;
+  SetAccum<VERTEX<Person>> @event;
+  FILE f (file_path);
+  Start = {Person.*};
+  testStart = {test1};
+  all = {test};
+  testStart = SELECT s FROM Start:s-(party_person|sp_person)-:t ACCUM t.@id+=s,t.@idd+=getvid(s);
+  
+  FOREACH i in range[0,1000] DO
+  
+  Start = SELECT s FROM Start:s-(party_person|sp_person)-:t WHERE getvid(s)%1000==i ACCUM t.@idd+=getvid(s);
+  break;
+  END;
+  cl = SELECT s FROM all:t-(claim_has_event)-Claim:s;
+  
+  cl = SELECT s FROM cl:s-(party_claim)-InvolvedParty:t ACCUM s.@event+=t.@id;
+  ev = SELECT t FROM cl:s-(claim_has_event)-Event:t ACCUM t.@event+=s.@event;
+  cl = SELECT t FROM ev:s-(claim_has_event)-Claim:t ACCUM t.@event+=s.@event;
+  party = SELECT t FROM cl:s-(party_claim)-InvolvedParty:t ACCUM t.@event+=s.@event;
+  
+  
+  person_set = SELECT t FROM party:s-(party_person)-Person:t ACCUM FOREACH i in s.@event DO IF s.@idd>getvid(i) THEN t.@map+=(i->0.8) END END;
+  person_set = SELECT s FROM person_set:s
+          ACCUM FOREACH (key,weight) in s.@map DO
+                f.println(s,key,weight)
+          END
+          POST-ACCUM s.@map.clear();
+  cl = SELECT s FROM cl:s-(party_claim)-InvolvedParty:t POST-ACCUM s.@event.clear(),t.@event.clear();
+  ev = SELECT s FROM ev:s POST-ACCUM s.@event.clear();
+ // PRINT “aggregate_query works!“;
+}
