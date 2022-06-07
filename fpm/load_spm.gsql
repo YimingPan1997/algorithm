@@ -1,0 +1,8 @@
+use graph XboxCustomerJourney
+DROP JOB load_job_spm
+CREATE LOADING JOB load_job_spm FOR GRAPH XboxCustomerJourney{
+DEFINE FILENAME data="/home/tigergraph/test.csv";
+LOAD data TO EDGE spm_user VALUES($0, $1, $2) USING SEPARATOR=",", HEADER="false", EOL="\n";
+LOAD data TO VERTEX spm VALUES($1,_) USING SEPARATOR=",", HEADER="false", EOL="\n";
+}
+RUN loading job load_job_spm
